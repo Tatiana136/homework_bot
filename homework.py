@@ -64,7 +64,7 @@ def get_api_answer(timestamp):
 
 
 def check_response(response):
-    "Проверяет ответ API на соответствие формату."
+    """Проверяет ответ API на соответствие формату."""
     if not response:
         raise ValueError('Содержит пустой словарь.')
     if not isinstance(response, dict):
