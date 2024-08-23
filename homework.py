@@ -6,7 +6,8 @@ from http import HTTPStatus
 import requests
 from dotenv import load_dotenv
 from telebot import TeleBot
-from exceptions import MyException
+from telebot.apihelper import ApiException
+from exceptions import RequestAPIError, HTTPStatusError
 
 load_dotenv()
 
@@ -29,12 +30,17 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Проверка доступности переменных окружения."""
-    token_list = [
-        PRACTICUM_TOKEN,
-        TELEGRAM_TOKEN,
-        TELEGRAM_CHAT_ID
-    ]
-    return all(token_list)
+    token_dict = {
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
+    }
+    all_tokens_valid = True
+    for token_name, token in token_dict.items():
+        if not token:
+            logging.error(f'Отсутствует переменная окружения: {token_name}')
+            all_tokens_valid = False
+    return all_tokens_valid
 
 
 def send_message(bot, message):
@@ -42,7 +48,7 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(f'Сообщение отправлено {message}')
-    except Exception as error:
+    except (ApiException, requests.RequestException) as error:
         logging.error(f'Ошибка при отправке сообщения: {error}')
 
 
@@ -56,11 +62,11 @@ def get_api_answer(timestamp):
             logging.error(
                 f'Статус ответа'
                 f'{response.status_code}')
-            raise requests.HTTPError(f'Статус {response.status_code}')
+            raise HTTPStatusError(response.status_code)
         return response.json()
-    except Exception as request_error:
+    except requests.RequestException as request_error:
         logging.error(f'Ошибка при запросе к API: {request_error}')
-        raise MyException(f'Ошибка при запросе к API: {request_error}')
+        raise RequestAPIError(f'Ошибка при запросе к API: {request_error}')
 
 
 def check_response(response):
@@ -80,13 +86,13 @@ def check_response(response):
 
 def parse_status(homework):
     """Извлекает статус конкретной домашней работы."""
-    homework_name = homework.get('homework_name')
-    status = homework.get('status')
-    verdict = HOMEWORK_VERDICTS.get(status)
     if 'homework_name' not in homework:
         raise KeyError('Отсутствует ключ "homework_name"')
     if 'status' not in homework:
         raise KeyError('Отсутствует ключ status')
+    homework_name = homework.get('homework_name')
+    status = homework.get('status')
+    verdict = HOMEWORK_VERDICTS.get(status)
     if not verdict:
         raise ValueError(f'Неизвестный статус работы: {status}')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
@@ -132,7 +138,7 @@ if __name__ == '__main__':
     # Настройка базовой конфигурации модуля logging
     logging.basicConfig(
         level=logging.DEBUG,
-        format='%(asctime)s - %(levelname)s - %(message)s',
+        format='%(asctime)s - %(levelname)s - %(message)s - %(lineno)d',
         stream=sys.stdout
     )
     main()
